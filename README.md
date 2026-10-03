@@ -89,18 +89,19 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # fir
 
 ## Configuration
 
-**Settings → Plugins → Whale Girl** (in-page card): the high-frequency subset — show on page, size, opacity, wandering, sleep delay, and the feed/play reply pools (one per line). Changes **save and apply live, no restart**.
+**Settings → Built-in plugins → Whale Girl** (tab): the high-frequency subset — show on page, size, opacity, wandering, sleep delay, and the feed/play reply pools (one per line). Changes **save and apply live, no restart**.
 
-The full option list stays in the `whale-girl:` section of `<dshHome>/settings.yaml` (advanced/additional knobs like window durations):
+The full option list (advanced/additional knobs like window durations) lives in that entry's `config` inside the current profile's Cordis patch (entry id `whale-girl`; `<dshHome>/settings.yaml` is imported once at startup since 0.2.x):
 
 ```yaml
-whale-girl:
-  enabled: true      # web render toggle (false disables the in-page pet while a desktop companion runs)
-  size: 110          # pet size px (64–160)
-  opacity: 1         # default opacity (0.2–1)
-  walk:
-    enabled: true    # wandering toggle
-  sleepAfterMs: 60000
+- id: whale-girl
+  config:
+    enabled: true    # web render toggle (false disables the in-page pet while a desktop companion runs)
+    size: 110        # pet size px (64–160)
+    opacity: 1       # default opacity (0.2–1)
+    walk:
+      enabled: true  # wandering toggle
+    sleepAfterMs: 60000
 ```
 
 Full option list and why the semantic layer (XP / titles) is sealed: `lib/src/config.mjs`. **Not configurable** (changing XP / title thresholds would break the accumulation ledger).

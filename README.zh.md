@@ -86,18 +86,19 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # 首
 
 ## 配置
 
-**设置 → 插件 → 鲸鱼娘**（面板卡片）：高频子集——网页端显示、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**保存即生效、免重启**。
+**设置 → 内置插件 → 鲸鱼娘**（标签页）：高频子集——网页端显示、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**保存即生效、免重启**。
 
-全量与高级项（如各窗口时长）仍在 `<dshHome>/settings.yaml` 的 `whale-girl:` section：
+全量与高级项（如各窗口时长）写在当前 profile 的 Cordis patch 里该条目的 `config` 下（entry id `whale-girl`；`<dshHome>/settings.yaml` 自 0.2.x 起只在启动时导入一次）：
 
 ```yaml
-whale-girl:
-  enabled: true      # 网页端渲染开关（与桌面伴侣并存时设 false 关闭网页端宠物，避免双宠物）
-  size: 110          # 宠物尺寸 px（64–160）
-  opacity: 1         # 常态透明度（0.2–1）
-  walk:
-    enabled: true    # 游走开关
-  sleepAfterMs: 60000
+- id: whale-girl
+  config:
+    enabled: true    # 网页端渲染开关（与桌面伴侣并存时设 false 关闭网页端宠物，避免双宠物）
+    size: 110        # 宠物尺寸 px（64–160）
+    opacity: 1       # 常态透明度（0.2–1）
+    walk:
+      enabled: true  # 游走开关
+    sleepAfterMs: 60000
 ```
 
 完整配置项清单与语义层（XP/称号）封闭说明见 `lib/src/config.mjs`。**语义层不可配**（改 XP/称号阈值会破坏积累账本一致性）。

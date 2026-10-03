@@ -28,8 +28,9 @@
       "platform": "web"
     }
   },
-  "dependencies": {
-    "schemastery": "^3.18.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vlln/whale-girl.git"
   },
   "scripts": {
     "gates": "node scripts/gates/run.mjs",
@@ -42,8 +43,7 @@
     "esbuild": "^0.28.1"
   },
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vlln/whale-girl.git"
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
   }
 }
