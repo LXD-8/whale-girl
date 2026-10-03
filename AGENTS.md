@@ -52,7 +52,7 @@ node scripts/build-client.mjs --check   # 校验 lib/client.js 新鲜度（只�
 - **每个非平凡改动必须在同一 PR 内新增或更新至少一条决策记录**；豁免与格式见 [decisions/README.md](decisions/README.md)。
 - **约定必须有门禁。** 机械可查的约定写成只拒绝一条不变量的程序；每个门禁有用非法样例证明它会拒绝的测试。门禁清单的权威是 [scripts/gates/run.mjs](scripts/gates/run.mjs)，本文件不手抄。
 - **生成物一律不手改**：`lib/client.js` 由 [scripts/build-client.mjs](scripts/build-client.mjs) 生成，改 [lib/client/index.mjs](lib/client/index.mjs)；新鲜度由 `--check` 守护。
-- **官方插件契约**：仓库根 `package.json` 的 `dsh.bundle.patch` → `cordis.patch.yml`（insert 挂载自身）+ `dsh.client`（platform web）；Node half 入口 `lib/index.mjs`（`name`/`inject`/`apply`）；client 经 `__ModuleLoader__.load` 注册（`lib/client/index.mjs` 命名导出 `name`/`apply`）。
+- **官方插件契约**：仓库根 `package.json` 的 `dsh.bundle.patch` → `cordis.patch.yml`（insert 挂载自身）+ `dsh.client`（platform web）；Node half 入口 `lib/index.mjs`（`name`/`inject`/`Config`/`apply`）——`Config` schema 即设置命名空间（条目 id），live 字段标 `.volatile()`；client 经 `__ModuleLoader__.load` 注册（`lib/client/index.mjs` 命名导出 `name`/`inject`/`apply`）。
 - **注释与文档写契约，不写推理转录**：行为、时序、异常、后果、所有权、安全使用条件保留；实现叙述、测试走查、评审史、代码复述删除。只写当前态。
 - **一个 PR 一种性质** + 对应标签（feature / bug-fix / doc / testing / cleanup）；独立改动拆开；缺陷在引入它的那个 PR 上修，不往下游打补丁。**PR 性质标签与决策分类是两套词汇**：决策分类是封闭集合（feature/bug-fix/simplification/architecture/process/testing，见 [decisions/README.md](decisions/README.md)）——cleanup 改动进 `simplification/` 目录，doc 改动通常无决策记录（纯文档豁免）。
 - **宿主/平台环境性行为首次复现即沉淀**：如「宿主会清理/覆盖 CSS 注入样式」这类环境事实，第 1 次踩坑就写 bug-fix 决策记录并标注「环境事实」，不等到第 N 次再固化（教训见 hitarea/menu/effects 系列记录）。

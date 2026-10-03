@@ -8,8 +8,8 @@ Status: implemented
 
 ## Decision
 
-- **src/config.mjs**（新增，零宿主依赖可单测）：`DEFAULTS`（体验层默认值单一来源）+ `buildSchema()`（schemastery schema，默认值= DEFAULTS 防双源漂移）+ `validateConfig`（跨字段校验：walk 成对 min/max）。含 14 项：size/opacity/walk{6}/sleepAfterMs/pollMs/idlePauseMs/bubbleMs/welcomeMs/celebrateMs/errorMs/disappointedMs。
-- **Node half settings 接入**：`ctx.get('settings')` 条件探测（web 组合有 provider，CLI/headless 缺失时回退 DEFAULTS——inject 不加 'settings' 避免硬等待）。注册 `settings.register('dsh-pet', buildSchema(), { applies:'live', validate })`，`scope.get()` 初始化 configRef，`scope.watch()` 热更新。
+- **src/config.mjs**（零宿主依赖可单测）：`DEFAULTS`（体验层默认值单一来源）+ `buildSchema()`（schemastery schema，默认值= DEFAULTS 防双源漂移）+ `readConfig()`（解引用 volatile 叶、与 DEFAULTS 合并、成对区间归一）。
+- **Node half 设置接入**：本模块导出 `Config = buildSchema()`（条目 id 即设置命名空间），可 live 调的叶标 `.volatile()`——宿主原地提交新值、不重挂载并发 `loader/volatile-update`；消费处统一经 `readConfig(config)` 取值。机制换代见 [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)。
 - **窗口时长消费**：ERROR_MS/DISAPPOINTED_MS/WELCOME_MS/CELEBRATE_MS 模块常量删除，消费处统一读 `configRef.*Ms`（单一来源防双源漂移）。
 - **/config 路由**（GET 只读）：返回 `{ config, revision }`；写路径只有用户设置（settings 服务/文件），插件不自建写面（防 CSRF/越权）。
 - **/state 响应加 configRevision**：客户端轮询比对，变化才拉取 /config 应用（门控防每 3s 重置游走计时器）。
