@@ -77,24 +77,25 @@ function makeScope(initial = {}, opts = {}) {
       if (opts.ignoreWrite !== true) {
         let value = snap.value
         for (const op of ops) value = setPath(value, op.path, op.value)
-        snap = { ...snap, revision: revision + 1, value }
+        snap = { ...snap, revision: (revision ?? snap.revision) + 1, value }
       }
       return true
     },
   }
 }
 
-test('writeField：单字段按深路径提交，CAS 基线取当前快照 revision', async () => {
+test('writeField：单字段按深路径提交，不自己传 expectedRevision（交给控制器排队）', async () => {
   const scope = makeScope({ size: 110 })
   await writeField(scope, 'size', 130)
-  assert.deepEqual(scope.calls, [{ ops: [{ op: 'set', path: ['size'], value: 130 }], revision: 7 }])
+  assert.deepEqual(scope.calls.map((c) => c.ops), [[{ op: 'set', path: ['size'], value: 130 }]])
+  assert.equal(scope.calls[0].revision, undefined, '自己传快照 revision 会绕过控制器的 pendingRevision 栅栏')
   assert.equal(scope.getSnapshot().value.size, 130)
 })
 
 test('writeField：嵌套字段按叶路径写（mutate 深路径，不必整组合并）', async () => {
   const scope = makeScope({ walk: { enabled: true, minMs: 3000 }, replies: { feed: ['a'], play: ['b'] } })
   await writeField(scope, 'walk.enabled', false)
-  assert.deepEqual(scope.calls[0], { ops: [{ op: 'set', path: ['walk', 'enabled'], value: false }], revision: 7 })
+  assert.deepEqual(scope.calls[0].ops, [{ op: 'set', path: ['walk', 'enabled'], value: false }])
   assert.deepEqual(scope.getSnapshot().value.walk, { enabled: false, minMs: 3000 }, '组内其他键不丢')
   await writeField(scope, 'replies.feed', ['c'])
   assert.deepEqual(scope.getSnapshot().value.replies, { feed: ['c'], play: ['b'] }, '深路径合并而非整组覆盖')
@@ -106,7 +107,32 @@ test('writeField：逐次写入是独立提交（无暂存、无批量）', asyn
   await writeField(scope, 'size', 120)
   assert.equal(scope.calls.length, 2)
   assert.deepEqual(scope.calls.map((c) => c.ops[0].path), [['enabled'], ['size']])
-  assert.deepEqual(scope.calls.map((c) => c.revision), [7, 8], '每次提交用最新 revision 作基线')
+  assert.deepEqual(scope.calls.map((c) => c.revision), [undefined, undefined])
+})
+
+test('writeField：同一 RTT 内连续写入都落库（F1 回归：不接受自带的 CAS 栅栏）', async () => {
+  // 官方控制器按 pendingRevision 给后继写定栅栏；自己传过期的快照 revision 会被宿主按 CAS 拒绝
+  // （第一次其实已落库）→ 误报「未被接受」并丢掉后一次编辑。这里绑定「writeField 不传第二个参数」。
+  let revision = 7
+  const value = { enabled: true, size: 110 }
+  const applied = []
+  const scope = {
+    getSnapshot: () => ({ status: 'ready', writable: true, revision, value: { ...value } }),
+    mutate: async (ops, expected) => {
+      if (expected !== undefined) return false
+      for (const op of ops) {
+        applied.push(op.path.join('.'))
+        value[op.path[0]] = op.value
+      }
+      revision += 1
+      return true
+    },
+  }
+  await writeField(scope, 'size', 130)
+  await writeField(scope, 'enabled', false)
+  assert.deepEqual(applied, ['size', 'enabled'], '两次都必须被接受')
+  assert.equal(value.size, 130)
+  assert.equal(value.enabled, false)
 })
 
 test('writeField：宿主拒绝（revision 过期）时抛错，文档保持不变', async () => {
