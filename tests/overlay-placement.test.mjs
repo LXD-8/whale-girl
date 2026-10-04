@@ -21,12 +21,24 @@ const assertInside = (left, centerX, w, label) => {
   assert.ok(centerX + dx + w / 2 <= VW - 8 + 1e-9, `${label}: 右边缘越界`)
 }
 
+/** 断言浮层的纵向占用整段落在 [margin, VH - margin] 内（含 offsetY 与 size.h）。
+ * 旧实现只比 size.h、漏掉 offsetY，正是「代码认为放得下、实际被裁」那条窄带。 */
+const assertVertical = (p, rect, size, offsetY = 12, margin = 8, vh = VH) => {
+  const top = p.up ? rect.top - offsetY - size.h : rect.bottom + offsetY
+  const bottom = p.up ? rect.top - offsetY : rect.bottom + offsetY + size.h
+  assert.ok(top >= margin - 1e-9, `上边缘越界：${top} < ${margin}（up=${p.up}）`)
+  assert.ok(bottom <= vh - margin + 1e-9, `下边缘越界：${bottom} > ${vh - margin}（up=${p.up}）`)
+}
+
 test('中部位置且空间充足：请求上方 → 在上方，水平不动', () => {
-  const p = place(petAt(545, 400), { w: 200, h: 36 }, true)
+  const rect = petAt(545, 400)
+  const size = { w: 200, h: 36 }
+  const p = place(rect, size, true)
   assert.equal(p.up, true)
   assert.equal(p.top, '-12px')
   assert.equal(p.transform, 'translate(-50%, -100%)')
   assert.equal(p.left, '50%')
+  assertVertical(p, rect, size)
 })
 
 test('贴右边缘：向左平移回视口内（菜单被右边界裁掉的主因）', () => {
@@ -45,16 +57,33 @@ test('贴左边缘：向右平移回视口内', () => {
 })
 
 test('贴底部且请求下方：翻到上方', () => {
-  const p = place(petAt(545, 674), { w: 200, h: 36 }, false)
+  const rect = petAt(545, 674)
+  const size = { w: 200, h: 36 }
+  const p = place(rect, size, false)
   assert.equal(p.up, true)
   assert.equal(p.top, '-12px')
+  assertVertical(p, rect, size)
 })
 
 test('贴顶部且请求上方：翻到下方，且动画终点改用 translateX', () => {
-  const p = place(petAt(545, 0), { w: 200, h: 36 }, true)
+  const rect = petAt(545, 0)
+  const size = { w: 200, h: 36 }
+  const p = place(rect, size, true)
   assert.equal(p.up, false)
   assert.equal(p.top, 'calc(100% + 12px)')
   assert.equal(p.transform, 'translateX(-50%)')
+  assertVertical(p, rect, size)
+})
+
+test('真机窄带：请求下方时下沿放得下 size.h，但加上 offsetY 就放不下 → 必须翻面', () => {
+  // 真机数值（issue #23 复现）：视口 1280×457、宠物下边缘 393（高 110 → top 283）、
+  // 状态卡 169×51、offsetY 18。旧判据 roomBelow = 56 ≥ 51 → 不翻面 → 卡底边 462 被裁 5px。
+  const viewport = { w: 1280, h: 457 }
+  const rect = { width: 110, height: 110, left: 1154, top: 283, right: 1264, bottom: 393 }
+  const size = { w: 169, h: 51 }
+  const p = planOverlay({ rect, viewport, size, above: false, offsetY: 18 })
+  assert.equal(p.up, true, '下方实际可用 38px < 51px，必须翻到上方')
+  assertVertical(p, rect, size, 18, 8, viewport.h)
 })
 
 test('请求的朝向放得下时不动（即使另一侧也放得下）', () => {
