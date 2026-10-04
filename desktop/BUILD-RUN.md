@@ -153,6 +153,11 @@ whale-girl-desktop/
    `core:event:allow-listen` 时监听静默失败（`invoke` 正常但事件全丢，宠物卡在初始 idle、
    点击无反馈）。必须给 capability 加 `["core:default", "core:event:allow-listen"]`
    （见 tauri.conf.json `security.capabilities`）。
+10. **Windows 构建缺 `icons/icon.ico`（环境事实）**：tauri-build 在 Windows 上无条件要求
+    `src-tauri/icons/icon.ico` 生成资源文件，仓库只发 `icon.png` 时 `cargo build --release`
+    直接失败（`icons/icon.ico not found`，issue #17；macOS 开发不触发）。仓库现随包提供该 ico
+    （16–256 多尺寸，≤128 BMP / 256 PNG）与 Tauri 默认列表引用的标准尺寸 PNG，并在
+    `bundle.icon` 里显式声明；重新生成用 `python3 scripts/make-icons.py`（需 Pillow）。
 
 ## 8. 验收对照（DESIGN §7）
 
