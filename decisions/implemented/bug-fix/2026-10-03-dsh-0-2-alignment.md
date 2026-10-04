@@ -35,10 +35,13 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
 
 - 注入面改为 `['slots', 'locale', 'configForms']`；scope 取 `ctx.configForms.get('whale-girl')`
   （官方 `ConfigFormController`，getSnapshot/subscribe/set/unset/mutate 与旧 scope 同形）。
-- 卡片槽迁到 `plugins.bundle.config`（keyed，key = bundle 包名 `whale-girl`，与设置命名空间、
-  patch 行 id 同一字面量），注册经 `configForms.whileServed(['whale-girl'], …)`：宿主不服务
-  该命名空间时不留空配置区。卡片组件改为包页视图（`summary` 回一句话，`page` 画字段区 +
-  保存/放弃脚注；图标/标题/描述 chrome 由包页提供），hooks 先于视图分支。
+- 卡片槽选 `plugins.item`（list 槽 = Plugins 页「官方」组里的卡片；`id` 取包名字面量，`order` 50
+  排在官方同族卡片 10–40 之后），注册经 `configForms.whileServed(['whale-girl'], …)`：宿主不服务
+  该命名空间时不注册、不留空卡片。卡片按该槽的两段视图实现（`summary` 回一句话——既作列表一行
+  又作详情描述；`page` 画字段区 + 保存/放弃脚注，标题/描述 chrome 由页面提供），hooks 先于视图分支。
+- 槽位置在评估后由 `plugins.bundle.config`（包页内嵌，官方契约给自有 bundle 的默认位）改为
+  `plugins.item`（列表卡片）：两者都合法，取「Plugins 页列表里一眼可见」；代价是占用官方插件
+  语义位（Alternatives 记了取舍）。
 - 暂存表单写路径改用官方 `mutate` 的**深路径 ops**（单次提交、单次 revision 栅栏）：
   `set` 只达单段，嵌套字段（`walk.enabled` / `replies.feed`）不再需要整组合并写；
   CAS 基线 revision 在首次暂存时取（暂存期间他人写入 → 保存被拒 → `failed`）。
@@ -67,15 +70,15 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
   `settingsScope` / `settings.plugin.item`，带自证测试。
 - `verify-config-sync` 扩为「默认值 + 命名空间同一性」：`cordis.patch.yml` 条目 id、
   `package.json` 包名、`src/config.mjs` `NAMESPACE`、client `SETTINGS_NAMESPACE` 字面量四处
-  必须同名（宿主以条目 id 作命名空间、以包名作 `plugins.bundle.config` 的 key——任一处漂移
+  必须同名（宿主的设置命名空间 = 条目 id；包名与卡片 id 取同一份身份字面量——任一处漂移
   即卡片静默消失或设置面不再被读取）。
 
 ## 取代检查
 
 部分取代 [feature/2026-08-31-settings-panel-card.md](../feature/2026-08-31-settings-panel-card.md)
 的缝选择与传输面：该记录的 `settings.plugin.item` keyed 槽 + `ctx.settingsScope.bind()` 由本记录
-取代为 `plugins.bundle.config` + `configForms.get()`，卡片 chrome（折叠头 + 未保存徽章）改由官方
-包页提供。其动机（GUI 内配置入口）、卡片范围（高频 7 字段）、暂存/保存/放弃语义、locale 独立
+取代为 `plugins.item` + `configForms.get()`，卡片 chrome（折叠头 + 未保存徽章）改由官方
+页面提供。其动机（GUI 内配置入口）、卡片范围（高频 7 字段）、暂存/保存/放弃语义、locale 独立
 命名空间契约不受影响；该记录已加回链。
 
 部分取代 [feature/2026-08-09-config-system.md](../feature/2026-08-09-config-system.md) 的注册与
@@ -90,9 +93,14 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
 **A：只从 inject 摘掉 `settingsScope`。** 宠物恢复挂载，但卡片永久不出现、Node half 仍不激活，
 配置面继续静默失效；且留下「注入了宿主不存在的服务名」的契约漂移，弃。
 
-**B：卡片迁 `plugins.item`**（「插件」页官方组里的独立卡片，发现性最好）。该缝的官方契约明确写
-「OCCUPIED by the official settings pages… a bundle's configuration belongs in
-`plugins.bundle.config` or `plugins.row.config` instead」——第三方 bundle 占用它会顶掉官方语义位置，弃。
+**B：卡片放 `plugins.bundle.config`**（包页「描述与行清单之间」的内嵌配置区——官方契约给自有 bundle
+的默认位，`key` = 包名）。功能等价且不与官方插件抢位置，但要进包页才见配置（多一次点击），
+且 key 把包名与卡片位置绑在一起；发现性优先，弃。
+
+**B2：改用官方 `@deepseek-ai/dsh-client-ui-primitives` 的 `SettingsForm`/`SettingsValueField` 画卡片。**
+平台种子表里有这些控件（0.2.0），能少写一套自绘；但官方表单模型只支持单段字段路径（嵌套的
+`walk.enabled` / `replies.feed` 仍要绕），文案池多行控件也要自绘，且把卡片外观交给平台内部组件；
+手写表单已单测覆盖，弃。
 
 **C：卡片迁 `plugins.row.config`**（包页上该行的「配置」按钮，开独立页）。功能等价且 form 由页面
 直接下发，但比包页内嵌多一次点击才见配置，且键（`whale-girl#whale-girl`）把包名与行 id 的耦合
@@ -121,7 +129,7 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
 - dsh 0.2.0-rc.2 冷启动下两个 half 都激活：启动日志无 `entry did not activate`，浏览器无
   `Failed to load plugins`，宠物以 sprite 渲染（`verify-client-smoke` / `verify-client-behavior`
   探针实测通过）。
-- 配置面恢复且可用：Plugins → whale-girl 包页出现配置卡片（实测渲染出 7 个字段行）；卡片改
+- 配置面恢复且可用：Plugins 页「官方」组出现 whale-girl 卡片（实测渲染出 7 个字段行）；卡片改
   size 110↔140 保存后，`/whale-girl/config` 立即反映新值与递增 revision，页面内宠物
   `--pet-size` 跟着变（volatile 原地提交，无重挂载、无刷新），写入落进 profile patch 的条目
   `config:` 块（实测：`- id: whale-girl` + `config: {size: 140}`）。

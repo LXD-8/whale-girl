@@ -1,4 +1,4 @@
-# Decision: 插件包页配置卡片——官方 plugins.bundle.config 槽接入（高频子集）
+# Decision: Plugins 页配置卡片——官方 plugins.item 槽接入（高频子集）
 
 Status: implemented
 
@@ -12,11 +12,10 @@ Status: implemented
 
 ## Decision
 
-- **client half 注册官方包页配置卡片**：keyed 槽 `plugins.bundle.config`（官方
-  `dsh-client-ui-plugin-manager` 声明；keyed 槽缺 key 启动即抛），`key` = bundle 包名
-  `whale-girl`（与 Node half 的 settings 命名空间、patch 行 id 同一字面量）。位置：
-  设置 → 插件 → whale-girl 包页，渲染在包描述与行清单之间。缝的换代与传输面见
-  [bug-fix/2026-10-03-dsh-0-2-client-seam.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)。
+- **client half 注册 Plugins 页卡片**：list 槽 `plugins.item`（官方 `dsh-client-ui-plugin-manager`
+  声明；`id` = 包名字面量、`order` 50、`label` 为本地化标题 thunk），卡片出现在 **Plugins 页
+  「官方」组**，点开是该插件自己的页面。缝的换代与传输面见
+  [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)。
 - **卡片范围 = 高频子集**：`enabled`（网页端显示）/ `size` / `opacity` / `walk.enabled`
   / `sleepAfterMs` 五个高频项 + `replies.feed` / `replies.play` 回话文案池（每行一条）。
   窗口时长类（bubble/welcome/celebrate/error/disappointed）与 pollMs 等低频调校项不进
@@ -37,7 +36,7 @@ Status: implemented
   不服务该命名空间时不留空配置区。apply 内 try/catch 守卫注册——注册失败仅「无卡片」，
   宠物本体照常跑。react 由平台种子表提供（`getStaticModules` 种子 `react`），
   esbuild `--external:react`（bundle 内 `require("react")`），不自带运行时。
-- **卡片 chrome 由包页提供**：图标/标题/描述画在包页，卡片只画字段区与保存/放弃脚注；
+- **卡片 chrome 由页面提供**：图标/标题/描述画在 Plugins 页，卡片只画字段区与保存/放弃脚注；
   summary 视图回一句话描述。
 - **locale 独立命名空间 `settings.whale-girl`**（zh/en 两套），与 README 行为描述一致。
 - **无 Node half 改动**：命名空间注册/校验/热更新沿用 config-system；写面仍走宿主
@@ -49,7 +48,7 @@ Status: implemented
 
 部分被 [bug-fix/2026-10-03-dsh-0-2-client-seam.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
 取代：本记录早期的 `settings.plugin.item` keyed 槽 + `ctx.settingsScope.bind()` 传输面由
-该记录换代（`plugins.bundle.config` + `configForms.get()`）；动机、卡片范围、暂存/保存语义、
+该记录换代（`plugins.item` + `configForms.get()`）；动机、卡片范围、暂存/保存语义、
 locale 契约与写面信任边界不受影响。
 
 无重叠——本记录只覆盖 client 侧卡片表面（槽注册 + 暂存表单 + locale + build
