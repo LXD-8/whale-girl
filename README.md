@@ -89,7 +89,7 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # fir
 
 ## Configuration
 
-**Plugins → Installed → whale-girl bundle page** (config card): the high-frequency subset — show on page, size, opacity, wandering, sleep delay, and the feed/play reply pools (one per line). Changes **save and apply live, no restart**.
+**Plugins → Installed → whale-girl bundle page** (config card): the high-frequency subset — show on page, size, opacity, wandering, sleep delay, and the feed/play reply pools (one per line). Changes **apply immediately, no restart** (a switch writes on click; numbers and reply pools write on blur or Enter).
 
 The full option list lives in the plugin entry's `config` in the profile patch (`<dshHome>/profiles/<profile>/cordis.patch.yml`); a `whale-girl:` section in `<dshHome>/settings.yaml` is imported into that entry once:
 

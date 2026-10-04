@@ -21,39 +21,41 @@ Status: implemented
   窗口时长类（bubble/welcome/celebrate/error/disappointed）与 pollMs 等低频调校项不进
   卡片——官方 AgentLoopCard 同样只编辑 served schema 的子集 by design；settings.yaml 仍是
   全量高级入口。
-- **交互对齐官方 CardForm 语义**（参考实现 `vlln/dsh-loop` 的 LoopSettingsForm）：
-  `edit` 暂存（draft 整体替换使引用失效）→ `save` 一次性提交（revision-fenced）→ 按宿主
-  接受值重读逐字段确认（失败置 `failed`）；`discard` 丢弃；快照内容未变时引用稳定
-  （React #185 防线，缓存键 = scope 快照引用 + draft 引用 + saving/failed）。
-- **嵌套组（walk/replies）写整个顶层键**：客户端 set 只暴露单段路径
-  （如 'walk.enabled' 会字面落键），宿主 mutate 支持深路径但 client 面不达。
-  整组写基于已提交组对象合并叶（幂等，不丢组内其他叶）。默认值不写第二份——表单兜底
-  由 index.mjs 传入 CFG_DEFAULTS（verify-config-sync 门禁保证与 src/config.mjs DEFAULTS
-  一致）。
+- **交互（已换代）**：本记录最初采用官方 CardForm 式暂存/保存语义（`edit` 暂存 → `save` 一次性
+  提交 → `discard` 丢弃；嵌套组写整个顶层键，因为当时的 client `set` 只达单段）。这两点已由
+  [simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)
+  换代：改动即时写入、无暂存层，写路径走官方 `mutate` 深路径（`'walk.enabled'` 不再字面落键）。
+  仍然成立的部分：字段集合与默认值单一来源（`index.mjs` 传 `CFG_DEFAULTS`，verify-config-sync
+  门禁保证与 `src/config.mjs` DEFAULTS 一致）；快照引用稳定（React #185 防线）。
 - **client inject 声明 `['slots', 'locale', 'configForms']`**（cordis 严格注入：未声明
   即抛 `cannot get property without inject`）；scope 取 `ctx.configForms.get(namespace)`
   （官方 `ConfigFormController`），注册经 `configForms.whileServed([namespace])`——宿主
   不服务该命名空间时不留空配置区。apply 内 try/catch 守卫注册——注册失败仅「无卡片」，
-  宠物本体照常跑。react 由平台种子表提供（`getStaticModules` 种子 `react`），
-  esbuild `--external:react`（bundle 内 `require("react")`），不自带运行时。
-- **卡片 chrome 由页面提供**：图标/标题/描述画在 Plugins 页，卡片只画字段区与保存/放弃脚注；
-  summary 视图回一句话描述。
+  宠物本体照常跑。react 与 `@deepseek-ai/dsh-client-ui-primitives` 由平台种子表提供
+  （`getStaticModules` 种子），esbuild `--external`（bundle 内 `require(...)`），不自带运行时。
+- **卡片 chrome 由页面提供**：图标/标题/描述由 whale-girl 包页画，卡片只画字段区（无保存脚注，
+  见 direct-write 记录）。
 - **locale 独立命名空间 `settings.whale-girl`**（zh/en 两套），与 README 行为描述一致。
 - **无 Node half 改动**：命名空间注册/校验/热更新沿用 config-system；写面仍走宿主
   settings 服务（revision-fenced 文档变更），符合「插件不自建写面」的信任边界。
-- **门禁/自证**：`tests/settings-form.test.mjs`（12 例：暂存语义、快照引用稳定、组整组合并
-  写、宿主拒绝 → failed、行解析往返、dispose 退订）。
+- **门禁/自证**：`tests/settings-fields.test.mjs`（13 例：叶取值、叶值等价、快照派生、即时写入
+  深路径提交与失败确认、字段表完整性）——原 `tests/settings-form.test.mjs` 随暂存模型一并删除。
 
 ## 取代检查
 
 部分被 [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
 取代：本记录早期的 `settings.plugin.item` keyed 槽 + `ctx.settingsScope.bind()` 传输面由
-该记录换代（`plugins.item` + `configForms.get()`）；动机、卡片范围、暂存/保存语义、
-locale 契约与写面信任边界不受影响。
+该记录换代（`plugins.item` + `configForms.get()`）；动机、卡片范围、locale 契约与写面信任边界
+不受影响。
 
 槽选择另部分被 [bug-fix/2026-10-04-settings-card-bundle-slot.md](../bug-fix/2026-10-04-settings-card-bundle-slot.md)
 取代：`plugins.item`（「官方」组列表卡片）改回 `plugins.bundle.config`（包页配置区，key = 包名），
-理由是该槽属于安装自带的官方设置页；卡片范围、暂存/保存语义、locale 与写面边界仍按本记录。
+理由是该槽属于安装自带的官方设置页；卡片范围、locale 与写面边界仍按本记录。
+
+暂存/保存语义与嵌套组整组写部分被
+[simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)
+取代：改为即时写入、删除暂存模型与保存/放弃按钮，写路径走官方 `mutate` 深路径；控件选型归
+[simplification/2026-10-04-settings-card-official-controls.md](../simplification/2026-10-04-settings-card-official-controls.md)。
 
 无重叠——本记录只覆盖 client 侧卡片表面（槽注册 + 暂存表单 + locale + build
 external）；settings 命名空间注册/校验/热更新/写面信任边界归
@@ -77,13 +79,14 @@ external）；settings 命名空间注册/校验/热更新/写面信任边界归
 
 ## Consequences
 
-- GUI 用户可配置高频体验项与回话文案池，保存即生效（live 热更新 Node half 已实现，
+- GUI 用户可配置高频体验项与回话文案池，改动即时生效（live 热更新 Node half 已实现，
   /state configRevision 下发客户端无需重启）；README 的 "(or the settings UI)" 表述
   变为真实。
-- 新增模块：`lib/client/settings-form.mjs`（纯逻辑，零 React/零宿主依赖，单测 12 例）、
-  `lib/client/settings-card.mjs`（React 卡片 + zh/en locale + 注册函数）；`lib/client/index.mjs`
+- 新增模块：`lib/client/settings-card.mjs`（React 卡片 + zh/en locale + 注册函数）与
+  `lib/client/settings-fields.mjs`（纯逻辑，零 React/零宿主依赖，单测 13 例；本记录早期的
+  `settings-form.mjs` 随暂存模型一起删除，见 direct-write 记录）；`lib/client/index.mjs`
   声明 `inject = ['slots','locale','configForms']` 与守卫注册；`scripts/build-client.mjs`
-  以 `--external:react` 产出 bundle。
+  以 `--external:react`（及 client primitives）产出 bundle。
 - 实现细节：卡片 key（= bundle 包名 = 设置命名空间）在 client 以字面量 `SETTINGS_NAMESPACE`
   声明并注释交叉契约——client bundle 不可 import src/config.mjs（其 import schemastery，浏览器
   不打包）；改 Node half 命名空间时该字面量必须同步（实测守护：key 不同名 → 卡片永不出现）。

@@ -86,7 +86,7 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # 首
 
 ## 配置
 
-**插件 → 已安装 → whale-girl 包页**（配置卡片）：高频子集——网页端显示、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**保存即生效、免重启**。
+**插件 → 已安装 → whale-girl 包页**（配置卡片）：高频子集——网页端显示、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**改动即时生效、免重启**（开关点击即写；数字与文案池失焦或回车即写）。
 
 全量与高级项（如各窗口时长）在 profile patch 的条目 `config:`（`<dshHome>/profiles/<profile>/cordis.patch.yml`）；`<dshHome>/settings.yaml` 的 `whale-girl:` section 会被一次性导入该条目：
 

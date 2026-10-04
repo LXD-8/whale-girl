@@ -18,15 +18,19 @@ Status: implemented
 - **不再注册 `plugins.item`**：该槽留给安装自带的官方设置页；本地化词条随之删掉只作列表卡片
   标题用的 `title`。
 - 其余契约不变：`configForms.get(namespace)` 传输面、`whileServed([namespace])` 注册门禁、
-  暂存/保存/放弃语义、locale 命名空间 `settings.whale-girl`、React 卡片与种子表 external。
+  locale 命名空间 `settings.whale-girl`、React 卡片与种子表 external。保存语义在本次整合时已改为
+  即时写入，归
+  [simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)。
 
 ## 取代检查
 
 部分取代 [feature/2026-08-31-settings-panel-card.md](../feature/2026-08-31-settings-panel-card.md)
 与其换代记录 [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
 的**槽选择**：两记录主张的 `plugins.item`（「官方」组列表卡片）由本记录改回
-`plugins.bundle.config`（包页配置区）。卡片范围（高频 7 字段）、暂存/保存语义、locale 契约、
-`whileServed` 门禁、`configForms` 传输面与写面信任边界不受影响；两记录已加回链。
+`plugins.bundle.config`（包页配置区）。卡片范围（高频 7 字段）、locale 契约、`whileServed` 门禁、
+`configForms` 传输面与写面信任边界不受影响；两记录已加回链。暂存/保存语义已由
+[simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)
+取代。
 
 无重叠——settings 命名空间的注册/校验/热更新归
 [feature/2026-08-09-config-system.md](../feature/2026-08-09-config-system.md)，不受本记录影响。

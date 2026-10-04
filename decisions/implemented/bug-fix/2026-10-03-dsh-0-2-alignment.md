@@ -79,8 +79,10 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
 部分取代 [feature/2026-08-31-settings-panel-card.md](../feature/2026-08-31-settings-panel-card.md)
 的缝选择与传输面：该记录的 `settings.plugin.item` keyed 槽 + `ctx.settingsScope.bind()` 由本记录
 取代为 `plugins.item` + `configForms.get()`，卡片 chrome（折叠头 + 未保存徽章）改由官方
-页面提供。其动机（GUI 内配置入口）、卡片范围（高频 7 字段）、暂存/保存/放弃语义、locale 独立
-命名空间契约不受影响；该记录已加回链。
+页面提供。其动机（GUI 内配置入口）、卡片范围（高频 7 字段）、locale 独立命名空间契约不受影响；
+该记录已加回链。**本记录的卡片保存语义（暂存/保存/放弃 + 自带 revision CAS 基线）已被
+[simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)
+取代**（改为即时写入、栅栏交给控制器），本记录中描述该语义的段落只作历史说明。
 
 槽选择部分被 [bug-fix/2026-10-04-settings-card-bundle-slot.md](./2026-10-04-settings-card-bundle-slot.md)
 取代：本记录的 `plugins.item`（「官方」组列表卡片）改回 `plugins.bundle.config`（包页配置区，
