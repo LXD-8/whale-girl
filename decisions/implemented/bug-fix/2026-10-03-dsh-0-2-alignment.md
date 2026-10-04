@@ -41,7 +41,8 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
   又作详情描述；`page` 画字段区 + 保存/放弃脚注，标题/描述 chrome 由页面提供），hooks 先于视图分支。
 - 槽位置在评估后由 `plugins.bundle.config`（包页内嵌，官方契约给自有 bundle 的默认位）改为
   `plugins.item`（列表卡片）：两者都合法，取「Plugins 页列表里一眼可见」；代价是占用官方插件
-  语义位（Alternatives 记了取舍）。
+  语义位（Alternatives 记了取舍）。**该选择已被取代**——见本记录「取代检查」与
+  [bug-fix/2026-10-04-settings-card-bundle-slot.md](./2026-10-04-settings-card-bundle-slot.md)。
 - 暂存表单写路径改用官方 `mutate` 的**深路径 ops**（单次提交、单次 revision 栅栏）：
   `set` 只达单段，嵌套字段（`walk.enabled` / `replies.feed`）不再需要整组合并写；
   CAS 基线 revision 在首次暂存时取（暂存期间他人写入 → 保存被拒 → `failed`）。
@@ -80,6 +81,11 @@ whale-girl 按 0.1.0-rc.8 契约定型，在 dsh 0.2.0-rc.2 上的实际后果�
 取代为 `plugins.item` + `configForms.get()`，卡片 chrome（折叠头 + 未保存徽章）改由官方
 页面提供。其动机（GUI 内配置入口）、卡片范围（高频 7 字段）、暂存/保存/放弃语义、locale 独立
 命名空间契约不受影响；该记录已加回链。
+
+槽选择部分被 [bug-fix/2026-10-04-settings-card-bundle-slot.md](./2026-10-04-settings-card-bundle-slot.md)
+取代：本记录的 `plugins.item`（「官方」组列表卡片）改回 `plugins.bundle.config`（包页配置区，
+key = 包名）；本记录的其余决策（deep-path mutate、`Config` 导出与 volatile、jobs 事件面、门禁扩面）
+不受影响；该记录已加回链。
 
 部分取代 [feature/2026-08-09-config-system.md](../feature/2026-08-09-config-system.md) 的注册与
 读值机制：其 `settings.register(ns, buildSchema(), {applies:'live', validate})` +

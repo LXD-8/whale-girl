@@ -46,10 +46,14 @@ Status: implemented
 
 ## 取代检查
 
-部分被 [bug-fix/2026-10-03-dsh-0-2-client-seam.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
+部分被 [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
 取代：本记录早期的 `settings.plugin.item` keyed 槽 + `ctx.settingsScope.bind()` 传输面由
 该记录换代（`plugins.item` + `configForms.get()`）；动机、卡片范围、暂存/保存语义、
 locale 契约与写面信任边界不受影响。
+
+槽选择另部分被 [bug-fix/2026-10-04-settings-card-bundle-slot.md](../bug-fix/2026-10-04-settings-card-bundle-slot.md)
+取代：`plugins.item`（「官方」组列表卡片）改回 `plugins.bundle.config`（包页配置区，key = 包名），
+理由是该槽属于安装自带的官方设置页；卡片范围、暂存/保存语义、locale 与写面边界仍按本记录。
 
 无重叠——本记录只覆盖 client 侧卡片表面（槽注册 + 暂存表单 + locale + build
 external）；settings 命名空间注册/校验/热更新/写面信任边界归
@@ -86,5 +90,5 @@ external）；settings 命名空间注册/校验/热更新/写面信任边界归
 - 已知边界：卡片不含窗口时长/轮询等低频项（settings.yaml 仍可配全量）；语义层
   （XP/称号/曲线）封闭不变（verify-settings-schema 门禁无关此项）；卡片只在宿主服务该设置
   命名空间时出现（`whileServed` 未触发 → 无卡片）。dsh 0.2.0 起命名空间的提供方式换代，
-  Node half 侧的补齐路径见 [bug-fix/2026-10-03-dsh-0-2-client-seam.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
+  Node half 侧的补齐路径见 [bug-fix/2026-10-03-dsh-0-2-alignment.md](../bug-fix/2026-10-03-dsh-0-2-alignment.md)
   的「已知缺口」。
