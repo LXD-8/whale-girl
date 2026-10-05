@@ -13,7 +13,7 @@ export const INTERACT_PATH = \`\${ROUTE_PREFIX}/interact\`
 export const CONFIG_PATH = \`\${ROUTE_PREFIX}/config\`
 export const ASSETS_PATH = \`\${ROUTE_PREFIX}/assets\``
 
-function makeTree({ routes = ROUTES_SRC, client = OK.client, node = OK.node, assets = OK.assets } = {}) {
+function makeTree({ routes = ROUTES_SRC, client = OK.client, node = OK.node, assets = OK.assets, card = OK.card } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'vrsync-'))
   const mk = (rel, content) => {
     const p = join(root, rel)
@@ -22,6 +22,7 @@ function makeTree({ routes = ROUTES_SRC, client = OK.client, node = OK.node, ass
   }
   mk('lib/src/routes.mjs', routes)
   mk('lib/client/index.mjs', client)
+  mk('lib/client/settings-card.mjs', card)
   mk('lib/index.mjs', node)
   mk('lib/src/assets.mjs', assets)
   return root
@@ -30,6 +31,7 @@ function makeTree({ routes = ROUTES_SRC, client = OK.client, node = OK.node, ass
 const IMPORT = "import { STATE_PATH } from '../src/routes.mjs'"
 const OK = {
   client: `${IMPORT}\nconst x = 1`,
+  card: "import { UPDATE_PATH } from '../src/routes.mjs'\nconst c = 1",
   node: "import { STATE_PATH } from './src/routes.mjs'\nconst x = 1",
   assets: "import { ASSETS_PATH } from './routes.mjs'\nconst x = 1",
 }
