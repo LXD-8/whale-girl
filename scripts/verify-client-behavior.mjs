@@ -2,6 +2,8 @@
 // 用法：node scripts/verify-client-behavior.mjs <web-url> [scenario]
 // 场景：sleep-drag-wake（默认）——验证「sleep → 拖拽 → 放下 → idle 缓冲 → wake → 保持清醒
 // 不回 sleep」完整链路（v6 交互醒觉回归防线，见决策记录 2026-08-10-client-behavior-probe.md）。
+// 场景：update-row——验证配置卡片的更新行「点检查 → 点更新 → 真的发出 POST /whale-girl/update」链路
+// （需要部署里确实有新版可更新；按钮接线错位这类问题只有真点一下才暴露）。
 // 此前同类验证是一次性 /tmp/cdp-*.mjs 探针（不入库、不可重跑）——本文件固化场景，
 // 断言失败非零退出，供 client 行为改动后重跑。
 // 依赖：本机 Chrome（CHROME_BIN 可覆盖）；Node ≥22（全局 WebSocket）。
@@ -119,7 +121,113 @@ async function sleepDragWake({ call, log }) {
   return { during: 'drag', releaseWake: 'wake', settled: t3.sheet, release10s: t4.sheet }
 }
 
-const SCENARIOS = { 'sleep-drag-wake': sleepDragWake }
+// ---- 场景：更新行「检查 → 更新」点击链路 ----
+// 先点一次按钮把检查跑起来（挂载时本来也会查一次），等状态行给出「有新版本 / 已是最新」；若按钮
+// 变成更新动作（primary），再点一次，断言真的发出 POST /whale-girl/update、且按钮没有抛异常。
+async function updateRow({ call, log }) {
+  const evaluate = async (expression) => {
+    // awaitPromise：场景里的导航/点击是 async IIFE，不 await 拿回来的是 Promise 对象。
+    const r = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    if (r.exceptionDetails) throw new Error(`页面脚本抛错：${r.exceptionDetails.text ?? 'unknown'}`)
+    return r.result.value
+  }
+  // 首启弹窗（Preview Notice / 稍后配置）会挡住外壳：先点掉再等侧栏出现（英文界面同样要认）。
+  const shell = await evaluate(`(async () => {
+    const texts = (label) => [...document.querySelectorAll('a,button,div,span,p')].filter((n) => (n.innerText || '').trim() === label)
+    for (let i = 0; i < 90; i += 1) {
+      for (const label of ['Continue', '继续', 'Set up later', '稍后配置']) {
+        const hit = texts(label).at(-1)
+        if (hit) { hit.click(); await new Promise((r) => setTimeout(r, 800)) }
+      }
+      const nav = ['插件', 'Plugins'].some((label) => [...document.querySelectorAll('*')].some((n) => (n.innerText || '').trim() === label))
+      if (nav) return 'ready'
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    return 'timeout'
+  })()`)
+  if (shell !== 'ready') throw new Error('等待应用外壳超时（侧栏没出现）')
+  // 清掉首启弹窗并进入插件列表 → whale-girl 包页。
+  const gotoPluginPage = `(async () => {
+    const click = async (labels, ms) => {
+      for (const label of labels) {
+        const hit = [...document.querySelectorAll('a,button,[role="button"],[role="tab"],li,div,span,p')]
+          .filter((n) => (n.innerText || '').trim() === label).at(-1)
+        if (hit === undefined) continue
+        hit.click()
+        await new Promise((r) => setTimeout(r, ms))
+        return true
+      }
+      return false
+    }
+    if (!(await click(['插件', 'Plugins'], 2500))) return 'no-plugins-nav'
+    if (!(await click(['whale-girl'], 3000))) return 'no-plugin-card'
+    return document.querySelector('[data-whale-girl-update]') === null ? 'no-update-row' : 'ok'
+  })()`
+  const landed = await evaluate(gotoPluginPage)
+  if (landed !== 'ok') throw new Error(`没能停在更新行上（${landed}）`)
+  // 记录端点请求：接线错位时这里一条都不会有。
+  await evaluate(`(() => {
+    window.__wgCalls = []
+    const real = window.fetch
+    window.fetch = (...args) => {
+      const url = typeof args[0] === 'string' ? args[0] : String(args[0]?.url ?? '')
+      if (url.includes('/whale-girl/update')) window.__wgCalls.push({ url, method: String(args[1]?.method ?? 'GET').toUpperCase() })
+      return real(...args)
+    }
+    return 'ok'
+  })()`)
+  const rowState = () => evaluate(`(() => {
+    const row = document.querySelector('[data-whale-girl-update]')
+    const button = row.querySelector('button')
+    return JSON.stringify({ status: row.innerText, label: button.innerText.trim(), disabled: button.disabled, primary: button.className.includes('primary') || getComputedStyle(button).backgroundColor !== 'rgba(0, 0, 0, 0)' })
+  })()`)
+  const clickRowButton = () => evaluate(`(() => {
+    const button = document.querySelector('[data-whale-girl-update] button')
+    button.click()
+    return 'clicked'
+  })()`)
+  const waitFor = async (label, predicate, timeoutMs = 20000) => {
+    const start = Date.now()
+    let last = null
+    while (Date.now() - start < timeoutMs) {
+      last = JSON.parse(await rowState())
+      if (predicate(last)) return last
+      await sleep(500)
+    }
+    throw new Error(`等待 ${label} 超时（最后状态 ${JSON.stringify(last)}）`)
+  }
+  const settled = await waitFor('row-mounted', (view) => !view.label.includes('检查中'))
+  log('row', `状态行「${settled.status.replace(/\n/gu, ' ')}」按钮「${settled.label}」`)
+  if (settled.label.startsWith('检查更新')) {
+    await clickRowButton()
+    await waitFor('after-check', (view) => !view.label.includes('检查中'))
+  }
+  const ready = JSON.parse(await rowState())
+  if (!ready.label.startsWith('更新到') && !ready.label.startsWith('改跟')) {
+    throw new Error(`这个部署现在没有可更新版本（按钮是「${ready.label}」）——本场景需要一个有新版的环境`)
+  }
+  await clickRowButton()
+  const calls = async () => JSON.parse(await evaluate('JSON.stringify(window.__wgCalls)'))
+  const start = Date.now()
+  let posted = []
+  while (Date.now() - start < 180000) {
+    posted = (await calls()).filter((entry) => entry.method === 'POST')
+    const view = JSON.parse(await rowState())
+    if (posted.length > 0 && !view.label.includes('更新中')) break
+    await sleep(1000)
+  }
+  if (posted.length === 0) throw new Error('点了更新按钮却没有发出 POST /whale-girl/update（按钮接线断了）')
+  const after = await waitFor('after-update', (view) => !view.label.includes('更新中'), 180000)
+  log('result', `发出 ${posted.length} 次 POST，状态行「${after.status.replace(/\n/gu, ' ')}」`)
+  const exceptions = await evaluate(`(() => {
+    const row = document.querySelector('[data-whale-girl-update]')
+    return row.innerText.includes('TypeError') ? 'TypeError' : 'ok'
+  })()`)
+  if (exceptions !== 'ok') throw new Error('更新行显示了异常文本')
+  return { posted: posted.length, label: after.label, status: after.status.replace(/\n/gu, ' ') }
+}
+
+const SCENARIOS = { 'sleep-drag-wake': sleepDragWake, 'update-row': updateRow }
 
 async function main() {
   const scenario = SCENARIOS[SCENARIO]
