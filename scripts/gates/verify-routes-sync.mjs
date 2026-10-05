@@ -23,6 +23,7 @@ export function check(root = ROOT) {
   const errors = []
   const consumers = [
     { file: 'lib/client/index.mjs', label: 'client/index.mjs' },
+    { file: 'lib/client/settings-card.mjs', label: 'client/settings-card.mjs' },
     { file: 'lib/index.mjs', label: 'index.mjs' },
     { file: 'lib/src/assets.mjs', label: 'src/assets.mjs' },
   ]
