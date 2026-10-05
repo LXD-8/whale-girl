@@ -24,7 +24,7 @@ Official **bundle plugin** (`dsh.bundle` + `dsh.client` in root `package.json`),
 
 ```sh
 dsh plugin --profile web add "github:vlln/whale-girl#main"   # single-line git source (build artifacts committed)
-# or npm source: dsh plugin --profile web add whale-girl@0.1.0
+# or npm source: dsh plugin --profile web add whale-girl@0.2.0
 # or local directory: dsh plugin --profile web add <path-to-whale-girl>
 ```
 
