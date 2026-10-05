@@ -175,15 +175,41 @@ test('status：本地路径安装认不出上游的三种情况都给 local-sour
   assert.equal(noBranch.reason, 'local-source', '拿不到默认分支名不猜 main')
 })
 
-test('status：profile 没记来源 → no-source；上游 403 → rate-limited 且带 detail', async () => {
+test('status：宿主认得包但记录没有 source → host-outdated；宿主根本没列出这个包 → no-source', async () => {
   const profileDir = makeProfile(gitLock(LOCAL_SHA))
-  const missing = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined), fetchJson: fakeFetch({}) }).status()
+  // 宿主有安装能力、也列出这个包，但记录里没有 source 字段（旧宿主的 BundleInfo 没有该字段）：
+  // 文案要引导升级宿主，不能混同于「查不到上游」。
+  const outdated = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined), fetchJson: fakeFetch({}) }).status()
+  assert.equal(outdated.reason, 'host-outdated')
+  assert.equal(outdated.canUpdate, false)
+  // 宿主的列表里根本没有这个包：真正的「查不到来源」。
+  const notInstalled = () => ({ listBundles: async () => [] })
+  const missing = await createUpdateHost({ self: SELF, profileDir, managerOf: notInstalled, fetchJson: fakeFetch({}) }).status()
   assert.equal(missing.reason, 'no-source')
   const limited = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf('github:vlln/whale-girl#main'), fetchJson: fakeFetch({ '/commits/main': httpError(403) }) }).status()
   assert.equal(limited.reason, 'rate-limited')
   assert.equal(limited.detail, 'HTTP 403')
   const broken = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf('github:vlln/whale-girl#main'), fetchJson: fakeFetch({ '/commits/main': httpError(500) }) }).status()
   assert.equal(broken.reason, 'check-failed')
+})
+
+test('apply：第二步 installBundle 真抛（锁超时）→ tracking-not-restored 且带钉住的 spec', async () => {
+  const profileDir = makeProfile(gitLock(LOCAL_SHA))
+  const specs = []
+  const manager = () => ({
+    listBundles: async () => [{ name: 'whale-girl', source: 'github:vlln/whale-girl#main', enabled: true, installed: true }],
+    installBundle: async (spec) => {
+      specs.push(spec)
+      if (specs.length === 2) throw new Error('profile package.json is locked (lock wait 120s)')
+      return { application: 'restart-required', changed: true }
+    },
+  })
+  const host = createUpdateHost({ self: SELF, profileDir, managerOf: manager, fetchJson: fakeFetch({ '/commits/main': { sha: UPSTREAM_SHA } }) })
+  const result = await host.apply()
+  assert.equal(result.state, 'failed')
+  assert.equal(result.errorCode, 'tracking-not-restored', '第二步真抛也要告知 profile 被钉住')
+  assert.equal(result.pinnedSpec, `github:vlln/whale-girl#${UPSTREAM_SHA}`, '第一步钉住的确切提交要交给界面')
+  assert.match(result.errorDetail ?? '', /locked/u)
 })
 
 test('apply：没有包管理服务 → unsupported，且不安装', async () => {

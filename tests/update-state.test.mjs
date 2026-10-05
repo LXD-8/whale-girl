@@ -12,6 +12,7 @@ const dict = {
   availableUnsupported: '有新版本 {target}，但此部署不支持应用内更新。',
   updateTo: '更新到 {target}…', updateToRef: '改跟 {ref}…', updating: '更新中…',
   updateUnsupported: '此部署不支持应用内更新。', updateUnknown: '无法确认上游版本。',
+  hostOutdated: '宿主版本过旧，无法检查更新（请升级 DSH）。',
   checkFailed: '检查失败，稍后再试。', checkRateLimited: '上游请求受限（GitHub 限流），稍后再试。',
   localSource: '本地路径安装，无法检查更新。', updated: '已更新。',
   updatedRestart: '已更新，改动将在下次启动生效。',
@@ -120,9 +121,10 @@ test('更新失败：状态行带诊断、用报错色，按钮仍可重试', ()
   assert.equal(view.action.run, onUpdate)
 })
 
-test('本地路径但不是 git 检出 / 无来源：各自的说明文案', () => {
+test('本地路径但不是 git 检出 / 无来源 / 宿主过旧：各自的说明文案', () => {
   assert.equal(row({ info: { current: { version: '0.1.0' }, state: 'unknown', canUpdate: false, reason: 'local-source' } }).status, '本地路径安装，无法检查更新。')
   assert.equal(row({ info: { current: { version: '0.1.0' }, state: 'unknown', canUpdate: false, reason: 'no-source' } }).status, '无法确认上游版本。')
+  assert.equal(row({ info: { current: { version: '0.1.0' }, state: 'unknown', canUpdate: false, reason: 'host-outdated' } }).status, '宿主版本过旧，无法检查更新（请升级 DSH）。')
 })
 
 test('outcomeOf：成功各态进 done，检查失败不算更新失败也不上红色', () => {
