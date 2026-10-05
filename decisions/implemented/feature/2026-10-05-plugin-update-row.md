@@ -14,7 +14,7 @@ DSH 不为 profile 安装的插件提供升级入口：`dsh-client-ui-plugin-man
 - **本地路径安装跟包自己声明的仓库的默认分支**：`dsh plugin add <目录>` 这类安装，profile 里没有上游可跟，所以退回包清单声明的 `repository` 去查它的默认分支（通常是 `main`），拿本地检出的提交（`<目录>/.git/HEAD`）与上游比；点更新时一步把 profile 依赖从 `link:<目录>` 换成 `github:<owner>/<repo>#<默认分支>`——即「本地安装也跟 main」。检出不是 git 仓库、或包没声明仓库时仍旧报「无法确认上游」。这一处是唯一使用包清单 `repository` 的地方，且只用于本地安装：git/registry 安装的更新目标永远只认 profile 记的 spec。
 - **更新不碰用户设置**：一次更新只写 profile 的 `package.json` 依赖与 `pnpm-lock.yaml`（宿主 `plugin-manager` 的 `RESTORED_FILES` 就这两个，失败时也只回滚这两个），条目的 `config:`（尺寸、透明度、回话文案、窗口时长……）与 patch 里其它条目一概不碰；传给 `installBundle` 的选项只有 `enabled`（原样保留启停）与 `requestId`，不带 `approvedBuilds`/`registry` 之类会改写 profile 的东西。本机实测：更新前后 `cordis.patch.yml` 逐字节一致，`/whale-girl/config` 里的设置不变。
 - **状态行给出当前短提交**：宿主包页的「来源信息」只显示包版本，而 git 安装下版本号不随提交变化（长期停在 `0.1.0`），「我装的是哪个提交」只有这一处能看到；有新版时同一行写「有新版本 <目标>（当前 <提交>）」。
-- **按钮只摆动作、不摆结论**：不再有「已是最新」「重启后生效」这类禁用标签——状态行说结果，按钮永远是可点的「检查更新…」；刚更新完也能再查一次，重启与否由结果文案说清（`overridden` 用重启也解决不了，更不该写成「重启后生效」）。
+- **按钮只摆动作、不摆结论**：不再有「已是最新」「重启后生效」这类禁用标签——状态行说结果；刚更新完也能再查一次，重启与否由结果文案说清（`overridden` 用重启也解决不了，更不该写成「重启后生效」）。有新版但宿主不能更新时，按钮停在禁用的更新动作上、状态行说明原因。
 - **只加更新，不重复版本**：包页的「来源信息」已经由页面画出所装版本与安装来源（`listBundles` 的 `source` 与包清单版本），卡片这一行不再显示一遍版本，只补页面没有的那件事——上游有没有新版、以及一键更新。有新版时状态行给出目标（git 装短提交、registry 装版本号），按钮文案里的版本号原样显示、不额外加 `v`。
 - **挂载时自动检查一次上游**（并缓存到组件状态），按钮文案跟随 macOS 的「检查更新…」约定：动词 + 省略号表示会有一段进行中的操作；检查中禁用并显示「检查中…」，更新中显示「更新中…」。
 - **检查走 Node half 的 `GET /whale-girl/update`**：客户端不直接访问上游（浏览器侧的 CSP/跨源与速率限制都不可控）。Node half 用 profile 记录下来的 spec 决定问哪里——git 安装问 `api.github.com/.../commits/<ref>`（`listBundles().source` 里的 spec 就是 profile 记的），registry 安装问 `registry.npmjs.org/<name>` 的 `dist-tags.latest`。
@@ -31,6 +31,13 @@ DSH 不为 profile 安装的插件提供升级入口：`dsh-client-ui-plugin-man
 - **降级路径**：宿主没有该服务、装的是本地路径（无可查询的上游）、或网络失败时，这一行仍显示当前版本，状态文案说明原因，不假装能更新。
 - **profile 目录按三级解析**：`ctx.get('profileContext').dir`（宿主服务，插件管理器自己也用它）→ `DSH_PROFILE_DIR` → `<dshHome>/profiles/<DSH_PROFILE>`；三级都拿不到时不猜，按「未知」呈现。锁文件读不到就等于读不到已安装提交，不会挂着一个错误的判断。
 - **纯逻辑单独成模块** `lib/src/update.mjs`（spec 归一、锁文件读值、版本比较、三态判断），由 `tests/update.test.mjs` 覆盖；网络与宿主调用留在 `lib/index.mjs`。
+
+## 取代检查
+
+无重叠——本记录只覆盖新增的「版本与更新行」。卡片本体与保存语义归
+[simplification/2026-10-04-settings-card-direct-write.md](../simplification/2026-10-04-settings-card-direct-write.md)
+与 [simplification/2026-10-04-settings-card-official-controls.md](../simplification/2026-10-04-settings-card-official-controls.md)；
+槽位归 [bug-fix/2026-10-04-settings-card-bundle-slot.md](../bug-fix/2026-10-04-settings-card-bundle-slot.md)。
 
 ## Alternatives considered
 
@@ -55,6 +62,7 @@ DSH 不为 profile 安装的插件提供升级入口：`dsh-client-ui-plugin-man
 - 配置只读（卡片显示「当前部署只读，无法修改。」）不影响这一行：那说的是条目配置的写面，而更新走宿主的 profile 包管理服务，宿主的插件页在同一个部署里同样提供安装/卸载。两者权限不同，所以不跟着卡片的 `disabled` 走。
 - 更新是两次 pnpm 运行（先确切提交、再换回跟踪的那条线），比单次慢约一倍；两次都失败会明确报错。
 - 检查依赖上游 API 的可用性（GitHub 未认证请求有速率限制）：检查失败只影响这一行的文案与按钮，宠物本体与既有配置读写不受影响。
+- **宿主版本要求**：检查/更新都要读宿主的 `BundleInfo.source`（profile 记录的安装来源）；该字段是上游在 `dsh-plugin-manager` 后来才加的（本机装的 0.2.0-rc.2 还没有）。更早宿主上本行显示「宿主版本过旧，无法检查更新（请升级 DSH）」，不产生崩溃或误导。
 - 本地路径安装点「更新」会把 profile 依赖从 `link:<目录>` 换成 `github:<owner>/<repo>#<默认分支>`：本地改动不再生效，换成了跟上游那条线——这正是「本地安装也跟 main」的含义，所以状态行与按钮都要在点之前写出来（「更新会改成跟 main」/「改跟 main…」）。目录不是 git 检出、或包没声明仓库时，仍旧显示「无法确认上游」。
 - 本地检出的 git 布局解析认 worktree：`.git` 是文件时顺着 `gitdir:` 找到真实 git 目录，再按 `commondir` 到公共目录里找分支引用与 packed-refs（worktree 的引用不在自己的目录里）。
 - 更新行的按钮由**纯函数**挑处理函数（`action.run` 指向检查或更新），组件只调 `action.run()`；`tests/update-state.test.mjs` 逐状态断言接线，客户端交互按仓库约定另有 `scripts/verify-client-behavior.mjs` 的 `update-row` 场景（点检查 → 点更新 → 断言真的发出 `POST`）。
