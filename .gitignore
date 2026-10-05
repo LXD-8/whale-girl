@@ -3,3 +3,5 @@ node_modules/
 *.log
 lib/assets/raw/
 lib/dsh-plugin-assets/
+# pnpm 11 在每个安装目录生成的 workspace 元数据（非仓库资产，install 后自动出现）
+pnpm-workspace.yaml
