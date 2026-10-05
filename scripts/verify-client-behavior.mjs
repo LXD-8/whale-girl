@@ -6,11 +6,17 @@
 // 断言失败非零退出，供 client 行为改动后重跑。
 // 依赖：本机 Chrome（CHROME_BIN 可覆盖）；Node ≥22（全局 WebSocket）。
 import { spawn } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const URL = process.argv[2]
 const SCENARIO = process.argv[3] ?? 'sleep-drag-wake'
 const DEBUG_PORT = 9240
+// 新版 Chrome 拒绝带 Origin 的 CDP WebSocket（需 --remote-allow-origins）；不隔离
+// --user-data-dir 时会挂到默认 profile（复用已有浏览器实例，/json 里可能是别的标签页）。
+const PROFILE_DIR = mkdtempSync(join(tmpdir(), 'whale-girl-behavior-'))
 
 if (!URL) {
   console.error('用法: node scripts/verify-client-behavior.mjs <web-url> [scenario]')
@@ -20,7 +26,7 @@ if (!URL) {
 // ---- CDP 基础（headless Chrome + Runtime/Input）----
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 async function connect() {
-  const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', `--remote-debugging-port=${DEBUG_PORT}`, '--window-size=1280,800', URL], { stdio: 'ignore' })
+  const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--remote-allow-origins=*', `--user-data-dir=${PROFILE_DIR}`, `--remote-debugging-port=${DEBUG_PORT}`, '--window-size=1280,800', URL], { stdio: 'ignore' })
   let ws
   for (let i = 0; i < 40; i++) {
     await sleep(500)

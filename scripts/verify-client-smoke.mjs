@@ -6,11 +6,16 @@
 // 这是 curl 覆盖不到的 client-apply 验证（P6 缺口实操面）——改 client/ 后跑一次。
 // 非门禁（依赖 Chrome 与运行中的 web）：人工验证步骤，见 AGENTS.md 按改动面选检查。
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const URL = process.argv[2]
 const DEBUG_PORT = 9240
+// 新版 Chrome 拒绝带 Origin 的 CDP WebSocket（需 --remote-allow-origins）；不隔离
+// --user-data-dir 时会挂到默认 profile（复用已有浏览器实例，/json 里可能是别的标签页）。
+const PROFILE_DIR = mkdtempSync(join(tmpdir(), 'whale-girl-smoke-'))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 if (!URL) {
@@ -53,7 +58,7 @@ function analyze(html) {
 // EventSource）不兼容——虚拟时间等网络空闲而 SSE 永不空闲，--dump-dom 会挂起。
 // 真实时间下等宠物渲染（assets + 首次 /state 往返）后再抓 DOM，analyze 断言不变。
 async function dump() {
-  const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', `--remote-debugging-port=${DEBUG_PORT}`, '--window-size=1280,800', URL], { stdio: 'ignore' })
+  const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--remote-allow-origins=*', `--user-data-dir=${PROFILE_DIR}`, `--remote-debugging-port=${DEBUG_PORT}`, '--window-size=1280,800', URL], { stdio: 'ignore' })
   let ws
   for (let i = 0; i < 40; i++) {
     await sleep(500)

@@ -9,6 +9,7 @@ client DOM 行为（拖拽/交互/状态序列）的回归验证此前全靠一�
 ## Decision
 
 - 新增 `scripts/verify-client-behavior.mjs`（人工验证步骤，非门禁——依赖 Chrome 与运行中的 web，同 verify-client-smoke）：headless Chrome + CDP（Runtime/Input），场景化执行 + 断言。
+- headless Chrome 的启动参数必须含 `--remote-allow-origins=*` 与每次独立的 `--user-data-dir`（`mkdtempSync`）：前者是 CDP WebSocket 的 Origin 校验（新版 Chrome 不带该参数会**永久挂起**在 `new WebSocket(...)`，不报错），后者防探针挂到默认 profile——那会复用已有浏览器实例，`/json` 里的第一个 page 可能是别的标签页，断言在错误的页面上失败（smoke 与 behavior 同款，两个脚本一致）。
 - 首个固化场景 `sleep-drag-wake`（v6 交互醒觉回归防线）：真实时间等宠物入睡 → 真实鼠标拖拽 → 断言序列契约 `sleep → drag → idle 缓冲 → wake → 保持清醒不回 sleep（10s）`，任一断言失败非零退出。
 - 场景表可扩展（SCENARIOS 对象）；入口 `node scripts/verify-client-behavior.mjs <web-url> [scenario]`，入 AGENTS.md 按改动面选检查表（client 行为改动行）。
 
