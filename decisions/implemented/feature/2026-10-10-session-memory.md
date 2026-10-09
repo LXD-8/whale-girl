@@ -33,6 +33,7 @@ Status: implemented
 ## Consequences
 
 - 宠物在 resume/fork 边沿会说一句上次完成的任务；fork 沿 `parentSession` 链回读（父会话须在开启期间被观测过，链断则不播——不猜）。
+- **回读播报排除 subagent**：subagent 子会话（会话头 `origin: 'subagent'`）同样经 `agent/created` 发布且带 `parentSession`，不区分的话每次 subagent spawn 都会误播「上次你们完成了…」——纯函数 `recallable(header)` 只让用户会话（无 origin）生成回读快照；子会话仍照常登记进账本（任务归属与血缘不丢）。
 - 新增 `data/whale-girl/sessions.json` 文件；卸载插件不删它（与 `state.json` 同理），隐私说明里写明可自行删除。
 - 开关默认关：升级后无任何行为变化，用户主动开启才开始记录。
 - `/state` 新增可选字段 `memory`（additive，`SNAPSHOT_API_VERSION` 不变）；旧客户端忽略该字段不受影响。
