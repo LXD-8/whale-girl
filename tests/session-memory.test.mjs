@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   SESSIONS_MAX, TASKS_MAX, LABEL_MAX, LINEAGE_HOPS_MAX,
   emptySessionMemory, normalizeSessionMemory, serializeSessionMemory,
-  observeSession, recordTask, memoryFor, memorySnapshot,
+  observeSession, recordTask, memoryFor, memorySnapshot, recallable,
 } from '../lib/src/session-memory.mjs'
 
 const T = 1_000_000
@@ -151,4 +151,12 @@ test('normalizeSessionMemory：超长标签截断到 LABEL_MAX', () => {
     sessions: { s: { at: T, tasks: [{ label: 'x'.repeat(LABEL_MAX + 50), at: T }] } },
   })
   assert.equal(norm.sessions.s.tasks[0].label.length, LABEL_MAX)
+})
+
+test('recallable：subagent 子会话不播报回读（防 spawn 刷屏），用户会话照常', () => {
+  assert.equal(recallable({ origin: 'subagent' }), false, 'subagent 子会话跳过播报')
+  assert.equal(recallable({}), true, '无 origin 的用户会话可播报')
+  assert.equal(recallable({ origin: undefined }), true)
+  assert.equal(recallable(null), true, 'header 缺失按用户会话处理（宽松）')
+  assert.equal(recallable(undefined), true)
 })
