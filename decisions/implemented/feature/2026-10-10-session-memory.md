@@ -14,7 +14,7 @@ Status: implemented
 - **血缘回读**：fork 的子会话在宿主会话头里带 `parentSession`（DSH 会话头字段，观测时登记进 `parent` 链），`memoryFor` 沿链找最近一条有任务记录的会话（最大 8 跳、防环、链断即 null 不猜）——「分支也记得上次做了什么」由此而来，无需宿主记录接口。
 - **写入点**（全部 `sessionMemory` 开关门控）：任务 `settled` 事件按 `JobView.owner`（SessionId）精确归属，无属主退回最近活跃会话、两者皆无则跳过；`session/event` 首见会话时登记血缘与标题；`agent/created` 回读生成快照。
 - **下发与播报**：`agent/created`（resume/fork/startup 边沿）的回读快照以 `memory: { at, distance, title, tasks }` 随 `/state` 下发，双窗口收口——Node 侧 `MEMORY_WINDOW_MS`（60s）过期即撤，客户端按 `at` 去重只播一次；文案纯函数 `memoryLine`（logic.mjs，失败任务不进气泡、标签截 14 字、`distance>0` 点明分支前）。
-- **开关语义**：默认 false（opt-in）；关 = 零读零写零副作用（内存副本丢弃、未播报的回读撤下，磁盘文件保留），开 = 懒加载；落盘与账本同节拍（1s 防抖 + `.tmp`/rename 原子写 + disable 末次落盘）。设置卡的说明按 `\n\n` 分两段（宿主 locale 的段落约定，卡片 `white-space: pre-line` 渲染）：先讲实现原理（本机文件、几字节/条、血缘回读），再讲隐私性（不进模型上下文、不上传网络、关闭停止读写、文件留本机可自删）。
+- **开关语义**：默认 false（opt-in）；关 = 零读零写零副作用（内存副本丢弃、未播报的回读撤下，磁盘文件保留），开 = 懒加载；落盘与账本同节拍（1s 防抖 + `.tmp`/rename 原子写 + disable 末次落盘）。设置卡的说明按 `\n` 换行分两行（宿主 locale 的换行约定，卡片 `white-space: pre-line` 渲染）：第一行讲实现原理（本机文件、几字节/条、血缘回读），第二行讲隐私性（不进模型上下文、不上传网络、关闭停止读写、文件留本机可自删）。
 
 ## 取代检查
 
