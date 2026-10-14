@@ -1,0 +1,22 @@
+/* 包页外壳复刻（值取自 dsh-src packages/client/ui-plugin-manager/src/client/
+   PluginManagerPage.module.css 的 .page / .page > * / .detailSections / .detailSection；
+   该槽本身没有自有底色/描边，页底色来自主题的 body background-color）。
+   注意：这不是 whale-girl 卡片本体的一部分，只是为了截图有真实的页面环境。 */
+html, body { margin: 0; padding: 0; }
+body {
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  box-sizing: border-box;
+  padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+.page > * { width: 100%; max-width: 960px; }
+.detailSections { display: flex; flex-direction: column; gap: 32px; margin-top: 32px; }
+.detailSection { display: flex; flex-direction: column; gap: 12px; }
