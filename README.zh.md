@@ -86,7 +86,7 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # 首
 
 ## 配置
 
-**插件 → 已安装 → whale-girl 包页**（配置卡片）：高频子集——网页端显示、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**改动即时生效、免重启**（开关点击即写；数字与文案池失焦或回车即写）。
+**插件 → 已安装 → whale-girl 包页**（配置卡片）：高频子集——网页端显示、会话记忆、尺寸、透明度、游走、睡眠等待，以及投喂/玩耍回话文案池（每行一条）。**会话记忆**默认关闭：开启后宠物把任务完成等里程碑写进本机 `data/whale-girl/sessions.json`（几字节/条），会话恢复或分支（fork）时沿会话血缘读回、重逢时说一句上次完成了什么——只写本机文件，不进模型上下文、不上传网络；关闭即停止读写（文件保留，可自行删除）。**改动即时生效、免重启**（开关点击即写；数字与文案池失焦或回车即写）。
 卡片首行是**更新行**：挂载时自动查一次上游（git 安装按提交、registry 安装按版本），状态行给出结论与当前短提交，有新版时按钮变成「更新到 <版本/提交>…」；更新经 DSH 的 profile 包管理服务重装，不碰你的设置。完整契约（端点、载荷、两步重装、失败原因、宿主版本要求）见 [docs/update-row.md](docs/update-row.md)。
 
 全量与高级项（如各窗口时长）在 profile patch 的条目 `config:`（`<dshHome>/profiles/<profile>/cordis.patch.yml`）；`<dshHome>/settings.yaml` 的 `whale-girl:` section 会被一次性导入该条目：
@@ -94,6 +94,7 @@ cd "$(npm root -g)/whale-girl-desktop/src-tauri" && cargo build --release  # 首
 ```yaml
 whale-girl:
   enabled: true      # 网页端渲染开关（与桌面伴侣并存时设 false 关闭网页端宠物，避免双宠物）
+  sessionMemory: false # 会话记忆（本机 sessions.json 记录 + 血缘回读；默认关，见配置卡片说明）
   size: 110          # 宠物尺寸 px（64–160）
   opacity: 1         # 常态透明度（0.2–1）
   walk:
