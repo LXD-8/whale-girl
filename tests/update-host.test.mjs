@@ -49,10 +49,31 @@ function makeCheckout({ sha = LOCAL_SHA, worktree = false, packed = false, detac
   return dir
 }
 
-const managerOf = (source, { enabled = true, installs = [], version } = {}) => () => ({
-  listBundles: async () => [{ name: 'whale-girl', source, ...(version === undefined ? {} : { version }), enabled, installed: true }],
-  installBundle: async (spec, options) => { installs.push({ spec, options }); return { application: 'restart-required', changed: true } },
-})
+/** 两代 `BundleInfo` 的忠实字段集（夹具用）：年代判据靠字段有无，别只挑单个字段造形状。
+ *  legacy = 0.2.0-rc.2 及更早：有 `version`，没有 `source`/`official`/`availability`（latest 通道实测）。
+ *  modern = 0.2.1-alpha.2 起：`official`/`availability` 恒有；`source` 只有 profile 自有依赖才有。 */
+const BUNDLE_SHAPES = {
+  legacy: { version: '0.2.0' },
+  modern: { official: false, availability: 'profile', version: '0.2.0' },
+}
+
+/** 假宿主包管理服务：`shape` 选年代形状，其余字段可覆盖；传 `null` = 显式删掉该字段
+ *  （造「新宿主但包清单读不到 → 连 version 都没有」这类真实组合）。 */
+const managerOf = (source, { enabled = true, installs = [], shape, ...fields } = {}) => () => {
+  const bundle = {
+    name: 'whale-girl',
+    ...(shape === undefined ? {} : BUNDLE_SHAPES[shape]),
+    ...(source === undefined ? {} : { source }),
+    ...fields,
+    enabled,
+    installed: true,
+  }
+  for (const [key, value] of Object.entries(fields)) if (value === null) delete bundle[key]
+  return {
+    listBundles: async () => [bundle],
+    installBundle: async (spec, options) => { installs.push({ spec, options }); return { application: 'restart-required', changed: true } },
+  }
+}
 /** 假网络：只认 GitHub/npm 的那几个 URL，按 payload 表回答；值是 Error 时抛出（模拟 403 等）。 */
 const fakeFetch = (routes) => async (url) => {
   for (const [suffix, payload] of Object.entries(routes)) {
@@ -175,18 +196,26 @@ test('status：本地路径安装认不出上游的三种情况都给 local-sour
   assert.equal(noBranch.reason, 'local-source', '拿不到默认分支名不猜 main')
 })
 
-test('status：宿主认得包但既无 source 也无 version（旧宿主）→ host-outdated；给了 version → no-source', async () => {
+test('status：旧形状宿主（含 latest 通道的 rc.2）→ host-outdated；新形状没来源 → no-source', async () => {
   const profileDir = makeProfile(gitLock(LOCAL_SHA))
-  // 宿主有安装能力、也列出这个包，但记录里既没有 source 也没有 version（0.2.0-rc.2 时代的
-  // BundleInfo 两个字段都没有）：无法确认宿主年代，文案引导升级宿主，不能混同于「查不到上游」。
-  const outdated = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined), fetchJson: fakeFetch({}) }).status()
-  assert.equal(outdated.reason, 'host-outdated')
-  assert.equal(outdated.canUpdate, false)
-  // 0.2.1-alpha.2 宿主给出 version、没有 source（如安装自带条目没记录来源）：宿主并不旧，
-  // 是真·没有可跟的上游——按 no-source 处理，不误导用户升级宿主。
-  const versionOnly = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined, { version: '0.2.0' }), fetchJson: fakeFetch({}) }).status()
-  assert.equal(versionOnly.reason, 'no-source')
-  assert.equal(versionOnly.current.version, '0.2.0')
+  // 0.2.0-rc.2（npm latest 通道）实测形状：BundleInfo 有 version，没有 source/official/availability。
+  // 宿主确实旧、确实查不到上游 → 文案必须引导升级；拿 version 判年代会把它误读成「真·无上游」。
+  const legacy = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined, { shape: 'legacy' }), fetchJson: fakeFetch({}) }).status()
+  assert.equal(legacy.reason, 'host-outdated')
+  assert.equal(legacy.canUpdate, false)
+  assert.equal(legacy.current.version, '0.2.0', '旧宿主给的 version 仍用于显示')
+  // 更早的宿主：连 version 都没有（两个字段全缺）→ 同样 host-outdated。
+  const ancient = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined), fetchJson: fakeFetch({}) }).status()
+  assert.equal(ancient.reason, 'host-outdated')
+  // 0.2.1-alpha.2 的安装自带条目：official/availability 恒有、没有 source（不是 profile 自有依赖）
+  // → 宿主并不旧，是真·没有可跟的上游，不得把用户引向升级宿主。
+  const shipped = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined, { shape: 'modern', official: true, availability: 'installation' }), fetchJson: fakeFetch({}) }).status()
+  assert.equal(shipped.reason, 'no-source')
+  assert.equal(shipped.current.version, '0.2.0')
+  // 新宿主但包清单读不到（availability: 'missing' + error，连 version 都没有）→ 仍按 no-source：
+  // 这是包的问题，不是宿主年代的问题。
+  const unreadable = await createUpdateHost({ self: SELF, profileDir, managerOf: managerOf(undefined, { shape: 'modern', availability: 'missing', version: null, error: { code: 'not-bundle' } }), fetchJson: fakeFetch({}) }).status()
+  assert.equal(unreadable.reason, 'no-source')
   // 宿主的列表里根本没有这个包：真正的「查不到来源」。
   const notInstalled = () => ({ listBundles: async () => [] })
   const missing = await createUpdateHost({ self: SELF, profileDir, managerOf: notInstalled, fetchJson: fakeFetch({}) }).status()
@@ -199,7 +228,7 @@ test('status：宿主认得包但既无 source 也无 version（旧宿主）→ 
 })
 
 test('status：current.version 优先取宿主 BundleInfo.version，锁文件与自身清单是回退', async () => {
-  // 宿主给了 version：优先于锁文件解析与自身清单（0.2.1-alpha.2 的 BundleInfo 直接给出已装版本）。
+  // 宿主给了 version：优先于锁文件解析与自身清单（0.2.0-rc.2 起 BundleInfo 就直接给出已装版本）。
   const hostVersion = makeProfile(registryLock('0.1.9'))
   const withHost = await createUpdateHost({ self: SELF, profileDir: hostVersion, managerOf: managerOf('whale-girl@0.1.9', { version: '0.2.0' }), fetchJson: fakeFetch({ '/whale-girl': { 'dist-tags': { latest: '0.2.0' } } }) }).status()
   assert.equal(withHost.current.version, '0.2.0')
