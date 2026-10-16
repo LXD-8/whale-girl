@@ -4,6 +4,8 @@
 // 不回 sleep」完整链路（v6 交互醒觉回归防线，见决策记录 2026-08-10-client-behavior-probe.md）。
 // 场景：update-row——验证配置卡片的更新行「点检查 → 点更新 → 真的发出 POST /whale-girl/update」链路
 // （需要部署里确实有新版可更新；按钮接线错位这类问题只有真点一下才暴露）。
+// 场景：memory-bubble——验证会话记忆回读气泡「/state 的 memory → 气泡文案 → 按 at 去重」链路
+// （拦 /state 响应注入 memory，不依赖真实任务/会话边沿，因此可重复跑）。
 // 此前同类验证是一次性 /tmp/cdp-*.mjs 探针（不入库、不可重跑）——本文件固化场景，
 // 断言失败非零退出，供 client 行为改动后重跑。
 // 依赖：本机 Chrome（CHROME_BIN 可覆盖）；Node ≥22（全局 WebSocket）。
@@ -50,8 +52,20 @@ async function connect() {
     ws.addEventListener('message', onMsg)
     ws.send(JSON.stringify({ id: myId, method, params }))
   })
+  // CDP 事件（无 id 的通知）分发：Fetch.requestPaused 这类要边跑边应答的场景需要它。
+  const listeners = new Map()
+  const on = (method, handler) => {
+    const set = listeners.get(method) ?? new Set()
+    set.add(handler)
+    listeners.set(method, set)
+  }
+  ws.addEventListener('message', (ev) => {
+    const m = JSON.parse(ev.data)
+    if (m.id !== undefined || typeof m.method !== 'string') return
+    for (const handler of listeners.get(m.method) ?? []) void handler(m.params)
+  })
   await call('Runtime.enable')
-  return { chrome, call }
+  return { chrome, call, on }
 }
 /** 读取当前 sprite 的 sheet 名（background-image URL 末段）与 motion 类——状态观察面。 */
 const SNAP = `(() => {
@@ -227,7 +241,87 @@ async function updateRow({ call, log }) {
   return { posted: posted.length, label: after.label, status: after.status.replace(/\n/gu, ' ') }
 }
 
-const SCENARIOS = { 'sleep-drag-wake': sleepDragWake, 'update-row': updateRow }
+// ---- 场景：会话记忆回读气泡（/state 的 memory 字段 → 气泡文案 → 按 at 去重）----
+// memory 是 Node half 与 client 之间唯一的记忆通路：字段名、形状或去重键任一处漂移，气泡就静默消失
+// （不报错、宠物照常跑），所以必须真在浏览器里看一眼。用 CDP Fetch 拦 /state 响应注入 memory
+// （其余字段原样透传，不动宠物状态机），断言「出现 → 同一 at 不重播 → at 变化再播」。
+// 不依赖真实任务/会话边沿（那要求 60s 窗口内正好有一次 resume/fork），因此可重复跑。
+async function memoryBubble({ call, log, on }) {
+  await call('Runtime.evaluate', { expression: `(() => {
+    const t = document.getElementById('deepseek-onboarding-title')
+    if (t) t.remove()
+    const labelled = document.querySelector('[aria-labelledby="deepseek-onboarding-title"]')
+    if (labelled) labelled.remove()
+    return 'ok'
+  })()`, returnByValue: true })
+  await sleep(1500) // 等 onboarding 隐藏的宠物恢复显示（syncInert 经 MutationObserver）
+
+  let injected = null // null = 透传真实响应；否则把它作为 memory 字段下发
+  let hits = 0
+  on('Fetch.requestPaused', async (params) => {
+    try {
+      if (injected === null) {
+        await call('Fetch.continueRequest', { requestId: params.requestId })
+        return
+      }
+      const body = await call('Fetch.getResponseBody', { requestId: params.requestId })
+      const text = Buffer.from(body.body, body.base64Encoded ? 'base64' : 'utf8').toString('utf8')
+      const payload = JSON.parse(text)
+      payload.memory = injected
+      hits += 1
+      await call('Fetch.fulfillRequest', {
+        requestId: params.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: 'content-type', value: 'application/json' }],
+        body: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'),
+      })
+    } catch { /* 页面卸载/请求取消时 fulfill 会失败：与断言无关，忽略 */ }
+  })
+  await call('Fetch.enable', { patterns: [{ urlPattern: '*whale-girl/state*', requestStage: 'Response' }] })
+
+  const readBubble = async () => {
+    const r = await call('Runtime.evaluate', { expression: `(() => {
+      const b = document.querySelector('[data-whale-girl] .pet-bubble')
+      return JSON.stringify(b === null ? null : b.textContent)
+    })()`, returnByValue: true })
+    return JSON.parse(r.result.value)
+  }
+  /** 等气泡变成期望值（want=null 表示等它消失）；轮询间隔 pollMs 默认 3s，超时给足三轮。 */
+  const waitBubble = async (want, what) => {
+    const deadline = Date.now() + 12000
+    for (;;) {
+      const text = await readBubble()
+      if (text === want) return text
+      if (Date.now() > deadline) throw new Error(`${what}：气泡是 ${JSON.stringify(text)}，期望 ${JSON.stringify(want)}`)
+      await sleep(200)
+    }
+  }
+
+  // ① 首次下发：气泡出现，文案由 memoryLine 生成（distance 0 → 「上次你们完成了…」）。
+  injected = { at: 1, distance: 0, title: null, tasks: [{ label: '修复门禁', ok: true, at: 1 }] }
+  await waitBubble('上次你们完成了「修复门禁」', '首次回读')
+  log('memory-bubble', `气泡出现「上次你们完成了「修复门禁」」（已拦截 /state ${hits} 次）`)
+
+  // ② 同一个 at 继续下发：气泡寿命（bubbleMs 默认 2.5s）过后不得重播——去重键是 at，不是「每轮都播」。
+  await waitBubble(null, '气泡消失')
+  await sleep(8000) // ≥2 轮轮询
+  const replayed = await readBubble()
+  if (replayed !== null) throw new Error(`同一 at 重播了气泡：${JSON.stringify(replayed)}`)
+  log('memory-bubble', '同一 at 未重播（去重生效）')
+
+  // ③ at 变化（等价于新的 resume/fork 边沿）→ 再播一次；distance>0 走分支文案，失败任务不进文案。
+  injected = {
+    at: 2,
+    distance: 1,
+    title: null,
+    tasks: [{ label: '补决策记录', ok: true, at: 2 }, { label: '跑挂的门禁', ok: false, at: 2 }],
+  }
+  await waitBubble('上次在分支前的会话里完成了「补决策记录」', 'at 变化后重播')
+  log('memory-bubble', 'at 变化后重播（分支文案，ok:false 的任务不进文案）')
+  return { hits }
+}
+
+const SCENARIOS = { 'sleep-drag-wake': sleepDragWake, 'update-row': updateRow, 'memory-bubble': memoryBubble }
 
 async function main() {
   const scenario = SCENARIOS[SCENARIO]
@@ -235,11 +329,11 @@ async function main() {
     console.error(`未知场景 "${SCENARIO}"（可用：${Object.keys(SCENARIOS).join(', ')}）`)
     process.exit(2)
   }
-  const { chrome, call } = await connect()
+  const { chrome, call, on } = await connect()
   try {
     const log = (label, detail) => console.log(`  [${label}] ${detail}`)
     console.log(`[verify-client-behavior] 场景 ${SCENARIO} @ ${URL}`)
-    const result = await scenario({ call, log })
+    const result = await scenario({ call, log, on })
     console.log(`[verify-client-behavior] OK：${JSON.stringify(result)}`)
     process.exit(0)
   } catch (error) {
