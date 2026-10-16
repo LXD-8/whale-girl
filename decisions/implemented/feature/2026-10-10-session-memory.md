@@ -10,11 +10,11 @@ Status: implemented
 
 **自建本机会话记忆，不依赖宿主记录接口**。新增 `lib/src/session-memory.mjs`（纯逻辑，零宿主依赖）与独立文件 `<dshHome>/data/whale-girl/sessions.json`（与账本 `state.json` 分离——开关只停记忆，不动账本）：
 
-- **存储形状**：`{ sessions: { [sessionId]: { parent?, title?, at, tasks[] } } }`。任务条目 `{ label, ok, at }`，标签 160 字、每会话 8 条、保留最近 64 个会话，全部越界裁剪；`normalizeSessionMemory` 逐字段容错，损坏即回空账本（记忆可丢，只影响气泡文案）。
-- **血缘回读**：fork 的子会话在宿主会话头里带 `parentSession`（DSH 会话头字段，观测时登记进 `parent` 链），`memoryFor` 沿链找最近一条有任务记录的会话（最大 8 跳、防环、链断即 null 不猜）——「分支也记得上次做了什么」由此而来，无需宿主记录接口。
-- **写入点**（全部 `sessionMemory` 开关门控）：任务 `settled` 事件按 `JobView.owner`（SessionId）精确归属，无属主退回最近活跃会话、两者皆无则跳过；`session/event` 首见会话时登记血缘与标题；`agent/created` 回读生成快照。
+- **存储形状**：`{ sessions: { [sessionId]: { parent?, title?, subagent?, at, tasks[] } } }`。任务条目 `{ label, ok, at }`，标签 160 字、每会话 8 条，全部越界裁剪；会话数分两套预算——最近 64 个**用户**会话 + 16 个 subagent 子会话，各自按 `at` 淘汰（子会话永不播报回读，一次密集委派 spawn 出的几十个子会话不得把用户自己的会话挤出账本）；`normalizeSessionMemory` 逐字段容错，损坏即回空账本（记忆可丢，只影响气泡文案）。
+- **血缘回读**：fork 的子会话在宿主会话头里带 `parentSession`（DSH 会话头字段，观测时登记进 `parent` 链），`memoryFor` 沿链找最近一条有任务记录的会话（最大 8 跳、防环、链断即 null 不猜）——「分支也记得上次做了什么」由此而来，无需宿主记录接口。子会话的任务与血缘同样入账，所以 fork 一个子会话仍能读到它做过什么。
+- **写入点**（全部 `sessionMemory` 开关门控）：任务 `settled` 事件按 `JobView.owner`（SessionId）精确归属，无属主退回最近活跃的**用户**会话（`lastSessionId` 只由非 subagent 的 `session/event` 更新——落在子会话上等于丢掉，它的回读永不播报）、两者皆无则跳过且**不加载账本**（不猜归属，也不留一个空文件）；`session/event` 首见会话时登记血缘与标题；`agent/created` 回读生成快照。
 - **下发与播报**：`agent/created`（resume/fork/startup 边沿）的回读快照以 `memory: { at, distance, title, tasks }` 随 `/state` 下发，双窗口收口——Node 侧 `MEMORY_WINDOW_MS`（60s）过期即撤，客户端按 `at` 去重只播一次；文案纯函数 `memoryLine`（logic.mjs，失败任务不进气泡、标签截 14 字、`distance>0` 点明分支前）。
-- **开关语义**：默认 false（opt-in）；关 = 零读零写零副作用（内存副本丢弃、未播报的回读撤下，磁盘文件保留），开 = 懒加载；落盘与账本同节拍（1s 防抖 + `.tmp`/rename 原子写 + disable 末次落盘）。设置卡的说明按 `\n` 换行分两行（宿主 locale 的换行约定，卡片 `white-space: pre-line` 渲染）：第一行讲实现原理（本机文件、几字节/条、血缘回读），第二行讲隐私性（不进模型上下文、不上传网络、关闭停止读写、文件留本机可自删）。
+- **开关语义**：默认 false（opt-in）；关 = 零读零写零副作用，但**关闭边沿先末次落盘再丢内存副本**——1s 防抖窗口内已记的任务不因拨开关而消失，此后 `memory` 恒为 null，事件分支全部跳过（未播报的回读同时撤下，磁盘文件保留）；开 = 懒加载。落盘与账本同节拍（1s 防抖 + `.tmp`/rename 原子写 + disable/卸载末次落盘）。设置卡的说明按 `\n` 换行分两行（宿主 locale 的换行约定，卡片 `white-space: pre-line` 渲染）：第一行讲实现原理（本机文件、几字节/条、血缘回读），第二行讲隐私性（不进模型上下文、不上传网络、关闭停止读写、文件留本机可自删）。
 
 ## 取代检查
 
@@ -33,7 +33,8 @@ Status: implemented
 ## Consequences
 
 - 宠物在 resume/fork 边沿会说一句上次完成的任务；fork 沿 `parentSession` 链回读（父会话须在开启期间被观测过，链断则不播——不猜）。
-- **回读播报排除 subagent**：subagent 子会话（会话头 `origin: 'subagent'`）同样经 `agent/created` 发布且带 `parentSession`，不区分的话每次 subagent spawn 都会误播「上次你们完成了…」——纯函数 `recallable(header)` 只让用户会话（无 origin）生成回读快照；子会话仍照常登记进账本（任务归属与血缘不丢）。
+- **回读播报排除 subagent**：subagent 子会话（会话头 `origin: 'subagent'`）同样经 `agent/created` 发布且带 `parentSession`，不区分的话每次 subagent spawn 都会误播「上次你们完成了…」——纯函数 `recallable(header)` 只让用户会话（无 origin）生成回读快照；子会话仍照常登记进账本（任务归属与血缘不丢），登记时打 `subagent: true`（一旦打上即粘住：origin 是创建时定死的，后续观测不得把它洗回用户会话），据此走独立淘汰预算，且不作为无属主任务的归属兜底。
+- 接线分两层归属测试：账本纯逻辑在 `tests/session-memory.test.mjs`（血缘/裁剪/容错/分预算淘汰），宿主接线在 `tests/session-memory-wiring.test.mjs`（假宿主驱动 `agent/created`·`session/event`·jobs `settled` 并调 `/state`：归属兜底、60s 回读窗口、开关语义与关闭边沿落盘、子会话不播报）；浏览器侧的回读气泡由 `scripts/verify-client-behavior.mjs` 的 `memory-bubble` 场景覆盖（CDP 拦 `/state` 响应注入 `memory`，断言「气泡出现 → 同一 `at` 不重播 → `at` 变化再播」，不依赖真实任务/会话边沿，可重复跑）。
 - 新增 `data/whale-girl/sessions.json` 文件；卸载插件不删它（与 `state.json` 同理），隐私说明里写明可自行删除。
 - 开关默认关：升级后无任何行为变化，用户主动开启才开始记录。
 - `/state` 新增可选字段 `memory`（additive，`SNAPSHOT_API_VERSION` 不变）；旧客户端忽略该字段不受影响。

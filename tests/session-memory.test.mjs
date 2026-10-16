@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SESSIONS_MAX, TASKS_MAX, LABEL_MAX, LINEAGE_HOPS_MAX,
+  SESSIONS_MAX, SUBAGENT_SESSIONS_MAX, TASKS_MAX, LABEL_MAX, LINEAGE_HOPS_MAX,
   emptySessionMemory, normalizeSessionMemory, serializeSessionMemory,
   observeSession, recordTask, memoryFor, memorySnapshot, recallable,
 } from '../lib/src/session-memory.mjs'
@@ -144,6 +144,54 @@ test('normalizeSessionMemory：会话数超上限按 at 淘汰最旧', () => {
   assert.equal(Object.keys(norm.sessions).length, SESSIONS_MAX)
   assert.ok(norm.sessions[`s${SESSIONS_MAX + 9}`], '最新的保留')
   assert.equal(norm.sessions.s0, undefined, '最旧的被淘汰')
+})
+
+test('observeSession：subagent 标记一旦登记即粘住（后续观测不洗回用户会话）', () => {
+  let mem = observeSession(emptySessionMemory(), { id: 'sub', parent: 'u1', subagent: true, at: T })
+  assert.equal(mem.sessions.sub.subagent, true)
+  // 后续观测没带标记（如只有 session/event 的标题补登）也不得丢：origin 是会话创建时定死的。
+  mem = observeSession(mem, { id: 'sub', title: '子会话', at: T + 1 })
+  assert.equal(mem.sessions.sub.subagent, true, '标记粘住')
+  assert.equal(mem.sessions.sub.title, '子会话')
+  // 用户会话不写多余字段（缺省即用户会话）。
+  mem = observeSession(mem, { id: 'u1', at: T })
+  assert.equal('subagent' in mem.sessions.u1, false)
+})
+
+test('淘汰分预算：子会话再多也挤不掉用户会话（各自按 at 淘汰）', () => {
+  let mem = emptySessionMemory()
+  for (let i = 0; i < SESSIONS_MAX; i += 1) mem = observeSession(mem, { id: `u${i}`, at: T + i })
+  // 一次密集委派：子会话都比用户会话新——共用一个预算会把最旧的用户会话挤掉。
+  for (let i = 0; i < SUBAGENT_SESSIONS_MAX + 5; i += 1) {
+    mem = observeSession(mem, { id: `sub${i}`, parent: 'u0', subagent: true, at: T + 1000 + i })
+  }
+  assert.ok(mem.sessions.u0, '最旧的用户会话仍在（不被子会话挤掉）')
+  assert.equal(Object.keys(mem.sessions).filter((id) => mem.sessions[id].subagent !== true).length, SESSIONS_MAX)
+  const subs = Object.keys(mem.sessions).filter((id) => mem.sessions[id].subagent === true)
+  assert.equal(subs.length, SUBAGENT_SESSIONS_MAX, '子会话只按自己的预算淘汰')
+  assert.equal(mem.sessions.sub0, undefined, '最旧的子会话被淘汰')
+  assert.ok(mem.sessions[`sub${SUBAGENT_SESSIONS_MAX + 4}`], '最新的子会话保留')
+})
+
+test('normalizeSessionMemory：保留 subagent 标记，子会话走独立预算', () => {
+  const sessions = { u: { at: T, tasks: [], subagent: false }, keep: { at: T + 999, tasks: [], subagent: true } }
+  for (let i = 0; i < SUBAGENT_SESSIONS_MAX + 3; i += 1) sessions[`s${i}`] = { at: T + i, tasks: [], subagent: true }
+  const norm = normalizeSessionMemory({ sessions })
+  assert.ok(norm.sessions.u, '用户会话不受子会话预算影响')
+  assert.equal(norm.sessions.keep.subagent, true, '标记从文件读回')
+  assert.equal('subagent' in norm.sessions.u, false, '非子会话不写标记字段')
+  assert.equal(Object.keys(norm.sessions).filter((id) => norm.sessions[id].subagent === true).length, SUBAGENT_SESSIONS_MAX)
+  assert.equal(norm.sessions.s0, undefined, '最旧的子会话被淘汰')
+})
+
+test('memoryFor：子会话登记不播报，但血缘可用（fork 子会话能读到它的任务）', () => {
+  let mem = recordTask(emptySessionMemory(), 'sub', { label: '子会话任务', at: T })
+  mem = observeSession(mem, { id: 'sub', parent: 'u1', subagent: true, at: T })
+  mem = observeSession(mem, { id: 'fork-of-sub', parent: 'sub', at: T + 1 })
+  assert.equal(recallable({ origin: 'subagent' }), false, '子会话自身不播报')
+  const found = memoryFor(mem, 'fork-of-sub')
+  assert.equal(found.sessionId, 'sub', 'fork 出的用户会话仍可沿链读到子会话的任务')
+  assert.equal(found.distance, 1)
 })
 
 test('normalizeSessionMemory：超长标签截断到 LABEL_MAX', () => {
